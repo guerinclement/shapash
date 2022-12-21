@@ -41,8 +41,8 @@ xpl = SmartExplainer(
 
 xpl.compile(x=Xtest, y_pred=y_pred, y_target=y_target)
 
-xpl.init_app()
+xpl.init_app(legacy=False)
 app = xpl.smartapp.app
 
 if __name__ == "__main__":
-    app.run_server(debug=False, host="0.0.0.0", port=8080)
+    app.run_server(debug=False, host="0.0.0.0", port=8080)#, processes=2, threaded=False)

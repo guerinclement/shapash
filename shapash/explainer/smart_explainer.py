@@ -957,7 +957,7 @@ class SmartExplainer:
 
         self.features_compacity = {"features_needed": features_needed, "distance_reached": distance_reached}
 
-    def init_app(self, settings: dict = None):
+    def init_app(self, settings: dict = None, legacy=False):
         """
         Simple init of SmartApp in case of host smartapp by another way
         
@@ -968,7 +968,12 @@ class SmartExplainer:
             Possible settings (dict keys) are 'rows', 'points', 'violin', 'features'
             Values should be positive ints
         """
-        self.smartapp = SmartApp(self, settings)
+
+        if legacy:
+            from shapash.webapp.smart_app_legacy import SmartApp as SmartAppLegacy
+            self.smartapp = SmartAppLegacy(self, settings)
+        else:
+            self.smartapp = SmartApp(self, settings)
 
     def run_app(self, port: int = None, host: str = None, title_story: str = None, settings: dict = None) -> CustomThread:
         """
