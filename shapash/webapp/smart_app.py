@@ -1,6 +1,7 @@
 """
 Main class of Web application Shapash
 """
+from copy import deepcopy
 import dash
 from dash import dash_table
 import dash_daq as daq
@@ -78,7 +79,7 @@ class SmartApp:
         self.callback_generator()
 
     @staticmethod
-    def select_point(graph,
+    def select_point(figure,
                      click_data):
         """
         Method which set the selected point in graph component
@@ -92,8 +93,8 @@ class SmartApp:
             #     self.layout.components['graph'][graph].figure['data'][curve].selectedpoints = \
             #         [point_id] if curve == curve_id else []
             for curve in range(
-                    len(graph.figure['data'])):
-                graph.figure['data'][curve].selectedpoints = \
+                    len(figure['data'])):
+                figure['data'][curve].selectedpoints = \
                     [point_id] if curve == curve_id else []
 
     def callback_fullscreen_buttons(self):
@@ -462,6 +463,7 @@ class SmartApp:
             ],
             [
                 State('global_feature_importance', 'clickData'),
+                State('global_feature_importance', 'figure'),
                 State('features', 'value')
             ]
         )
@@ -476,6 +478,7 @@ class SmartApp:
                                       bool_group,
                                       click_zoom,
                                       clickData,
+                                      figure,
                                       features):
             """
             update feature importance plot according label, click on graph,
@@ -507,7 +510,7 @@ class SmartApp:
                 zoom_active = True
             selection = None
             list_index = self.layout.list_index
-            graph_gfi = self.layout.components['graph']['global_feature_importance']
+            #graph_gfi = self.layout.components['graph']['global_feature_importance']
             selected_feature = self.explainer.inv_features_dict.get(
                 clickData['points'][0]['label'].replace('<b>', '').replace('</b>', '')
             ) if clickData else None
@@ -588,6 +591,7 @@ class SmartApp:
                                       for f in group_features]
                     if selected_feature not in list_sub_features:
                         selected_feature = None
+            #TODO: self.explainer.features_groups ?
             elif (ctx.triggered[0]['prop_id'] == 'card_global_feature_importance.n_clicks'
                   and self.explainer.features_groups and bool_group):
                 row_ids = []
@@ -609,12 +613,10 @@ class SmartApp:
                 if selected_feature in list_sub_features:
                     self.layout.last_click_data = clickData
                     raise PreventUpdate
-                else:
-                    pass
             else:
                 # Zoom management to generate graph which have global axis
                 # if len(self.layout.components['graph']['global_feature_importance'].figure['data']) == 1:
-                if len(graph_gfi.figure['data']) == 1:
+                if len(figure['data']) == 1:
                     selection = None
                 else:
                     row_ids = []
@@ -632,7 +634,7 @@ class SmartApp:
                                               and selected_feature in self.explainer.features_groups.keys()) else None
 
             # self.layout.components['graph']['global_feature_importance'].figure = \
-            graph_gfi.figure = \
+            figure = \
                 self.explainer.plot.features_importance(
                     max_features=features,
                     selection=selection,
@@ -643,16 +645,16 @@ class SmartApp:
                 )
             # Adjust graph with adding x axis title
             # self.layout.components['graph']['global_feature_importance'].adjust_graph(x_ax='Contribution')
-            graph_gfi.adjust_graph(x_ax='Contribution')
+            figure = MyGraph.adjust_graph_static(figure, x_ax='Contribution')
             # self.layout.components['graph']['global_feature_importance'].figure.layout.clickmode = 'event+select'
-            graph_gfi.figure.layout.clickmode = 'event+select'
+            figure.layout.clickmode = 'event+select'
             if selected_feature:
                 if self.explainer.features_groups is None:
                     # self.select_point('global_feature_importance', clickData)
-                    self.select_point(graph_gfi, clickData)
+                    self.select_point(figure, clickData)
                 elif selected_feature not in self.explainer.features_groups.keys():
                     # self.select_point('global_feature_importance', clickData)
-                    self.select_point(graph_gfi, clickData)
+                    self.select_point(figure, clickData)
 
             # font size can be adapted to screen size
             # nb_car = max([len(self.layout.components['graph']['global_feature_importance'].figure.data[0].y[i]) for i in
@@ -661,14 +663,14 @@ class SmartApp:
             #     yaxis=dict(tickfont={'size': min(round(500 / nb_car), 12)})
             # )
 
-            nb_car = max([len(graph_gfi.figure.data[0].y[i]) for i in
-                          range(len(graph_gfi.figure.data[0].y))])
-            graph_gfi.figure.update_layout(
+            nb_car = max([len(figure.data[0].y[i]) for i in
+                          range(len(figure.data[0].y))])
+            figure.update_layout(
                 yaxis=dict(tickfont={'size': min(round(500 / nb_car), 12)})
             )
 
             self.layout.last_click_data = clickData
-            return graph_gfi.figure, clickData
+            return figure, clickData
 
         @app.callback(
             Output(component_id='feature_selector', component_property='figure'),
@@ -686,7 +688,8 @@ class SmartApp:
             [
                 State('points', 'value'),
                 State('violin', 'value'),
-                State('global_feature_importance', 'figure')
+                State('global_feature_importance', 'figure'),
+                State('feature_selector', 'fs_figure')
             ]
         )
         def update_feature_selector(feature,
@@ -700,7 +703,8 @@ class SmartApp:
                                     click_zoom,
                                     points,
                                     violin,
-                                    figure):
+                                    figure,
+                                    fs_figure):
             """
             Update feature plot according to label, data,
             selected feature on features importance graph,
@@ -751,8 +755,6 @@ class SmartApp:
                     # Removing bold
                     # self.layout.selected_feature = feature['points'][0]['label'].replace('<b>', '').replace('</b>', '')
                     selected_feature = feature['points'][0]['label'].replace('<b>', '').replace('</b>', '')
-                    # TODO: signification de len(figure['data']) ???
-                    # Doit-on récupérer la figure mise à jour par le callback update_feature_importance ?
                     # if feature['points'][0]['curveNumber'] == 0 and \
                     #           len(self.layout.components['graph']['global_feature_importance'].figure['data']) == 2:
                     if feature['points'][0]['curveNumber'] == 0 and \
@@ -827,10 +829,11 @@ class SmartApp:
                         # self.layout.subset = [d['_index_'] for d in data]
                         subset = [d['_index_'] for d in data]
 
-            graph_fs = self.layout.components['graph']['feature_selector']
+            #graph_fs = self.layout.components['graph']['feature_selector']
 
             # self.layout.components['graph']['feature_selector'].figure = \
-            graph_fs.figure = \
+            #graph_fs.figure = \
+            fs_figure = \
                 self.explainer.plot.contribution_plot(
                     # col=self.layout.selected_feature,
                     col=selected_feature,
@@ -843,14 +846,14 @@ class SmartApp:
                 )
 
             # self.layout.components['graph']['feature_selector'].figure['layout'].clickmode = 'event+select'
-            graph_fs.figure['layout'].clickmode = 'event+select'
+            fs_figure['layout'].clickmode = 'event+select'
             # Adjust graph with adding x and y axis titles
             # self.layout.components['graph']['feature_selector'].adjust_graph(
-            graph_fs.adjust_graph(
+            fs_figure = MyGraph.adjust_graph_static(fs_figure,
                 #x_ax=truncate_str(self.layout.selected_feature, 110),
                 x_ax=truncate_str(selected_feature, 110),
                 y_ax='Contribution')
-            return graph_fs.figure
+            return fs_figure
 
         @app.callback(
             [
@@ -1011,7 +1014,8 @@ class SmartApp:
             ],
             [
                 State('index_id', 'value'),
-                State('dataset', 'data')
+                State('dataset', 'data'),
+                State('detail_feature', 'figure')
             ]
         )
         def update_detail_feature(threshold,
@@ -1027,7 +1031,8 @@ class SmartApp:
                                   bool_group,
                                   click_zoom,
                                   index,
-                                  data):
+                                  data,
+                                  figure):
             """
             update local explanation plot according to app changes.
             -------------------------------------------------------
@@ -1083,9 +1088,9 @@ class SmartApp:
                                   display_groups=bool_group)
             if np.issubdtype(type(self.explainer.x_init.index[0]), np.dtype(int).type):
                 selected = int(selected)
-            graph_df = self.layout.components['graph']['detail_feature']
+            #graph_df = self.layout.components['graph']['detail_feature']
             # self.layout.components['graph']['detail_feature'].figure = self.explainer.plot.local_plot(
-            graph_df.figure = self.explainer.plot.local_plot(
+            figure = self.explainer.plot.local_plot(
                 index=selected,
                 label=label,
                 show_masked=True,
@@ -1095,23 +1100,23 @@ class SmartApp:
             )
             # Adjust graph with adding x axis titles
             # self.layout.components['graph']['detail_feature'].adjust_graph(x_ax='Contribution')
-            graph_df.adjust_graph(x_ax='Contribution')
+            figure = MyGraph.adjust_graph_static(figure, x_ax='Contribution')
             # font size can be adapted to screen size
             # list_yaxis = [self.layout.components['graph']['detail_feature'].figure.data[i].y[0] for i in
             #               range(len(self.layout.components['graph']['detail_feature'].figure.data))]
-            list_yaxis = [graph_df.figure.data[i].y[0] for i in
-                          range(len(graph_df.figure.data))]
+            list_yaxis = [figure.data[i].y[0] for i in
+                          range(len(figure.data))]
             # exclude new line with labels of y axis
             list_yaxis = [x.split('<br />')[0] for x in list_yaxis]
             nb_car = max([len(x) for x in list_yaxis])
             # self.layout.components['graph']['detail_feature'].figure.update_layout(
             #     yaxis=dict(tickfont={'size': min(round(500 / nb_car), 12)})
             # )
-            graph_df.figure.update_layout(
+            figure.update_layout(
                 yaxis=dict(tickfont={'size': min(round(500 / nb_car), 12)})
             )
             # return self.layout.components['graph']['detail_feature'].figure
-            return graph_df.figure
+            return figure
 
         @app.callback(
             Output("validation", "n_clicks"),
@@ -1188,7 +1193,8 @@ class SmartApp:
             ],
             [
                 State('points', 'value'),
-                State('violin', 'value')
+                State('violin', 'value'),
+                State('prediction_picking','figure')
             ]
         )
         def update_prediction_picking(feature,
@@ -1200,7 +1206,8 @@ class SmartApp:
                                       is_open,
                                       click_zoom,
                                       points,
-                                      violin):
+                                      violin,
+                                      pp_figure):
             """
             Update feature plot according to label, data,
             selected feature and settings modifications
@@ -1252,10 +1259,10 @@ class SmartApp:
             else:
                 raise PreventUpdate
 
-            graph = self.layout.components['graph']['prediction_picking']
+            #graph = self.layout.components['graph']['prediction_picking']
             if self.explainer.y_target is not None:
                 # self.layout.components['graph']['prediction_picking'].figure = self.explainer.plot.scatter_plot_prediction(
-                graph.figure = self.explainer.plot.scatter_plot_prediction(
+                pp_figure = self.explainer.plot.scatter_plot_prediction(
                     # selection=self.layout.subset,
                     selection=subset,
                     max_points=points,
@@ -1263,10 +1270,10 @@ class SmartApp:
                 )
 
                 # self.layout.components['graph']['prediction_picking'].figure['layout'].clickmode = 'event+select'
-                graph.figure['layout'].clickmode = 'event+select'
+                pp_figure['layout'].clickmode = 'event+select'
                 # Adjust graph with adding x and y axis titles
                 # self.layout.components['graph']['prediction_picking'].adjust_graph(
-                graph.adjust_graph(
+                pp_figure = MyGraph.adjust_graph_static(pp_figure,
                     x_ax="True Values",
                     y_ax="Predicted Values")
             else:
@@ -1287,10 +1294,10 @@ class SmartApp:
                 ]
             )
                 # self.layout.components['graph']['prediction_picking'].figure = fig
-                graph.figure = figure
+                pp_figure = figure
 
             # return self.layout.components['graph']['prediction_picking'].figure
-            return graph.figure
+            return pp_figure
 
         @app.callback(
             Output("modal_feature_importance", "is_open"),

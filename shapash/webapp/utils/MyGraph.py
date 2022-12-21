@@ -83,6 +83,47 @@ class MyGraph(dcc.Graph):
                                  automargin=True
                                  )
 
+    @staticmethod
+    def adjust_graph_static(figure,
+                     x_ax="",
+                     y_ax=""):
+        """
+        Override graph layout for app use
+        ----------------------------------------
+        x_ax: title of the x-axis
+        y_ax: title of the y-axis
+        ---------------------------------------
+        """
+        new_title = update_title(figure.layout.title.text)
+        figure.update_layout(
+            autosize=True,
+            margin=dict(
+                l=50,
+                r=10,
+                b=10,
+                t=67,
+                pad=0
+            ),
+            width=None,
+            height=None,
+            title={
+                'y': 0.95,
+                'x': 0.5,
+                'xanchor': 'center',
+                'yanchor': 'top',
+                # update title and font-size of the title
+                'text': '<span style="font-size: 1.2vw;">' + new_title + '</span>'
+            }
+        )
+        # update x title and font-size of the title
+        figure.update_xaxes(title='<span style="font-size: 1vw;">' + x_ax + '</span>',
+                                 automargin=True
+                                 )
+        # update y title and font-size of the title
+        figure.update_yaxes(title='<span style="font-size: 1vw;">' + y_ax + '</span>',
+                                 automargin=True
+                                 )
+        return figure
 
 def update_title(title):
     """
