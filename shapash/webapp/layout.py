@@ -8,7 +8,7 @@ import plotly.graph_objs as go
 import random
 from math import log10
 from shapash.utils.utils import truncate_str
-from shapash.webapp.utils.MyGraph import MyGraph
+from shapash.webapp.utils.ShapashGraph import ShapashGraph
 from shapash.webapp.utils.explanations import Explanations
 from shapash.webapp.utils.utils import round_to_k
 
@@ -21,7 +21,20 @@ class AppLayout():
         self.color = explainer.plot._style_dict["webapp_button"]
         self.bkg_color = explainer.plot._style_dict["webapp_bkg"]
         self.title_menu_color = explainer.plot._style_dict["webapp_title"]
-        self.settings = settings
+        
+        # SETTINGS
+        settings_ini = {
+            'rows': 1000,
+            'points': 1000,
+            'violin': 10,
+            'features': 20,
+        }
+
+        if settings is not None:
+            for k, v in settings_ini.items():
+                settings_ini[k] = settings[k] if k in settings and isinstance(
+                    settings[k], int) and 0 < settings[k] else v
+        self.settings = settings_ini.copy()
 
         self.predict_col = ['_predict_']
         self.explainer.features_imp = self.explainer.state.compute_features_import(
@@ -63,6 +76,7 @@ class AppLayout():
             'body': {}
         }
         self.make_skeleton()
+        self.app.layout = html.Div([self.skeleton['navbar'], self.skeleton['body']])
 
 
     @staticmethod
@@ -332,20 +346,20 @@ class AppLayout():
             },
         )
 
-        self.components['graph']['global_feature_importance'] = MyGraph(
+        self.components['graph']['global_feature_importance'] = ShapashGraph(
             figure=go.Figure(), id='global_feature_importance'
         )
 
-        self.components['graph']['feature_selector'] = MyGraph(
+        self.components['graph']['feature_selector'] = ShapashGraph(
             figure=go.Figure(), id='feature_selector'
         )
 
         # Component for the graph prediction picking
-        self.components['graph']['prediction_picking'] = MyGraph(
+        self.components['graph']['prediction_picking'] = ShapashGraph(
             figure=go.Figure(), id='prediction_picking'
         )
 
-        self.components['graph']['detail_feature'] = MyGraph(
+        self.components['graph']['detail_feature'] = ShapashGraph(
             figure=go.Figure(), id='detail_feature'
         )
 

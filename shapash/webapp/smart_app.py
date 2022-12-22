@@ -1,30 +1,34 @@
 """
 Main class of Web application Shapash
 """
-from copy import deepcopy
-import dash
-from dash import dash_table
-import dash_daq as daq
-from dash import no_update
-from dash.exceptions import PreventUpdate
-import dash_bootstrap_components as dbc
-from dash import dcc
-from dash import html
-from dash import MATCH, ALL
-from dash.dependencies import Output, Input, State
-from flask import Flask
-import pandas as pd
-import plotly.graph_objs as go
-import numpy as np
+
 import datetime
 import re
-from shapash.webapp.utils.utils import check_row, round_to_k
-from shapash.webapp.utils.MyGraph import MyGraph
-from shapash.utils.utils import truncate_str
-from shapash.webapp.utils.explanations import Explanations
-from shapash.webapp.layout import AppLayout
-from shapash.webapp.callbacks import update_list_index
 
+import dash
+import dash_bootstrap_components as dbc
+import numpy as np
+import pandas as pd
+import plotly.graph_objs as go
+from dash import ALL, MATCH, dcc, html, no_update
+from dash.dependencies import Input, Output, State
+from dash.exceptions import PreventUpdate
+from flask import Flask
+
+from shapash.utils.utils import truncate_str
+from shapash.webapp.layout import AppLayout
+from shapash.webapp.utils.ShapashGraph import ShapashGraph
+from shapash.webapp.utils.utils import check_row
+
+# FIXME: un clic sur une barre des features importance ne réinitialise pas le diagramme, même sur une version de la webapp non modifiée
+# FIXME: refactorer le code
+# - appliquer un modèle style MVC
+#   - un module d'initialisation de l'IHM en fonction de l'explainer
+#   - un ou plusieurs modules de gestion des callbacks
+#   - un éventuel module de tranformation des données
+#   
+# - réduire le nombre d'inputs par callback en en créant de nouveaux (réduction de la complexité)
+# - développer des TU validant le fonctionnement des callbacks
 
 class SmartApp:
     """
@@ -58,20 +62,7 @@ class SmartApp:
             self.app.title += ' - ' + explainer.title_story
         self.explainer = explainer
 
-        # SETTINGS
-        self.settings_ini = {
-            'rows': 1000,
-            'points': 1000,
-            'violin': 10,
-            'features': 20,
-        }
-        if settings is not None:
-            for k, v in self.settings_ini.items():
-                self.settings_ini[k] = settings[k] if k in settings and isinstance(
-                    settings[k], int) and 0 < settings[k] else v
-        self.settings = self.settings_ini.copy()
-        self.layout = AppLayout(self.app, self.explainer, self.settings)
-        self.app.layout = html.Div([self.layout.skeleton['navbar'], self.layout.skeleton['body']])
+        self.layout = AppLayout(self.app, self.explainer, settings)
 
         # CALLBACK
         self.callback_fullscreen_buttons()
@@ -181,12 +172,12 @@ class SmartApp:
 
     def init_callback_settings(self):
         app = self.app
-        self.layout.components['settings']['input_rows']['rows'].value = self.settings['rows']
-        self.layout.components['settings']['input_points']['points'].value = self.settings['points']
-        self.layout.components['settings']['input_features']['features'].value = self.settings['features']
-        self.layout.components['settings']['input_violin']['violin'].value = self.settings['violin']
+        self.layout.components['settings']['input_rows']['rows'].value = self.layout.settings['rows']
+        self.layout.components['settings']['input_points']['points'].value = self.layout.settings['points']
+        self.layout.components['settings']['input_features']['features'].value = self.layout.settings['features']
+        self.layout.components['settings']['input_violin']['violin'].value = self.layout.settings['violin']
 
-        for id in self.settings.keys():
+        for id in self.layout.settings.keys():
             @app.callback(
                 [Output(f'{id}', 'valid'),
                  Output(f'{id}', 'invalid')],
@@ -420,7 +411,7 @@ class SmartApp:
                     df = df
                 if len(df) == 0:
                     raise ValueError(
-                        "Your dataframe is empty. It must have at list one row"
+                        "Your dataframe is empty. It must have at least one row"
                          )
             elif None not in nclicks_del:
                 df = self.layout.round_dataframe
@@ -525,7 +516,7 @@ class SmartApp:
                 selection = None
             elif ctx.triggered[0]['prop_id'] == 'dataset.data':
                 #self.layout.list_index = [d['_index_'] for d in data]
-                list_index = update_list_index(data)
+                list_index = [d['_index_'] for d in data]
             elif ctx.triggered[0]['prop_id'] == 'bool_groups.on':
                 clickData = None  # We reset the graph and clicks if we toggle the button
             # If we have selected data on prediction picking graph
@@ -591,9 +582,10 @@ class SmartApp:
                                       for f in group_features]
                     if selected_feature not in list_sub_features:
                         selected_feature = None
-            #TODO: self.explainer.features_groups ?
+            #FIXME: self.explainer.features_groups ?
             elif (ctx.triggered[0]['prop_id'] == 'card_global_feature_importance.n_clicks'
-                  and self.explainer.features_groups and bool_group):
+                  and self.explainer.features_groups 
+                  and bool_group):
                 row_ids = []
                 if selected_data is not None and len(selected_data) > 1:
                     # we plot prediction picking subset
@@ -645,7 +637,7 @@ class SmartApp:
                 )
             # Adjust graph with adding x axis title
             # self.layout.components['graph']['global_feature_importance'].adjust_graph(x_ax='Contribution')
-            figure = MyGraph.adjust_graph_static(figure, x_ax='Contribution')
+            figure = ShapashGraph.adjust_graph_static(figure, x_ax='Contribution')
             # self.layout.components['graph']['global_feature_importance'].figure.layout.clickmode = 'event+select'
             figure.layout.clickmode = 'event+select'
             if selected_feature:
@@ -795,7 +787,7 @@ class SmartApp:
                 subset = None
             else:
                 if ctx.triggered[0]['prop_id'] == 'dataset.data':
-                    list_index = update_list_index(data)
+                    list_index = [d['_index_'] for d in data]
                 # Zoom management to generate graph which have global axis
                 # if len(self.layout.components['graph']['global_feature_importance'].figure['data']) == 1:
                 if len(figure['data']) == 1:
@@ -849,7 +841,7 @@ class SmartApp:
             fs_figure['layout'].clickmode = 'event+select'
             # Adjust graph with adding x and y axis titles
             # self.layout.components['graph']['feature_selector'].adjust_graph(
-            fs_figure = MyGraph.adjust_graph_static(fs_figure,
+            fs_figure = ShapashGraph.adjust_graph_static(fs_figure,
                 #x_ax=truncate_str(self.layout.selected_feature, 110),
                 x_ax=truncate_str(selected_feature, 110),
                 y_ax='Contribution')
@@ -904,7 +896,7 @@ class SmartApp:
             if ctx.triggered[0]['prop_id'] != 'dataset.data':
                 if ctx.triggered[0]['prop_id'] == 'feature_selector.clickData':
                     selected = click_data['points'][0]['customdata'][1]
-                    self.click_graph = True
+                    self.click_graph = True # FIXME: à quoi sert self.click_graph ?
                 elif ctx.triggered[0]['prop_id'] == 'prediction_picking.clickData':
                     selected = prediction_picking['points'][0]['customdata']
                     self.click_graph = True
@@ -1100,7 +1092,7 @@ class SmartApp:
             )
             # Adjust graph with adding x axis titles
             # self.layout.components['graph']['detail_feature'].adjust_graph(x_ax='Contribution')
-            figure = MyGraph.adjust_graph_static(figure, x_ax='Contribution')
+            figure = ShapashGraph.adjust_graph_static(figure, x_ax='Contribution')
             # font size can be adapted to screen size
             # list_yaxis = [self.layout.components['graph']['detail_feature'].figure.data[i].y[0] for i in
             #               range(len(self.layout.components['graph']['detail_feature'].figure.data))]
@@ -1273,7 +1265,7 @@ class SmartApp:
                 pp_figure['layout'].clickmode = 'event+select'
                 # Adjust graph with adding x and y axis titles
                 # self.layout.components['graph']['prediction_picking'].adjust_graph(
-                pp_figure = MyGraph.adjust_graph_static(pp_figure,
+                pp_figure = ShapashGraph.adjust_graph_static(pp_figure,
                     x_ax="True Values",
                     y_ax="Predicted Values")
             else:
