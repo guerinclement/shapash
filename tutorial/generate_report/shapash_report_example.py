@@ -147,7 +147,7 @@ if __name__ == "__main__":
         if not pd.api.types.is_numeric_dtype(X_df[col]):
             X_df[col] = X_df[col].astype(object)
 
-    categorical_features = [col for col in X_df.columns if X_df[col].dtype == "object"]
+    categorical_features = [col for col in X_df.columns if X_df[col].dtype == "str"]
 
     encoder = OrdinalEncoder(cols=categorical_features, handle_unknown="ignore", return_df=True).fit(X_df)
 

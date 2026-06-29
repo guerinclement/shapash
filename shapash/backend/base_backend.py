@@ -91,7 +91,8 @@ class BaseBackend(ABC):
         local_contributions : pd.DataFrame
             The local contributions computed by the backend.
         """
-        assert isinstance(explain_data, dict), "The _run_explainer method should return a dict"
+        if not isinstance(explain_data, dict):
+            raise TypeError("The _run_explainer method should return a dict")
         if "contributions" not in explain_data.keys():
             raise ValueError(
                 "The _run_explainer method should return a dict"
@@ -101,7 +102,10 @@ class BaseBackend(ABC):
 
         local_contributions = explain_data["contributions"]
         if subset is not None:
-            local_contributions = local_contributions.loc[subset]
+            if isinstance(local_contributions, list):
+                local_contributions = [c[subset] for c in local_contributions]
+            else:
+                local_contributions = local_contributions.loc[subset]
         local_contributions = self.format_and_aggregate_local_contributions(x, local_contributions)
         return local_contributions
 
